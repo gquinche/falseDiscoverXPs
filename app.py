@@ -113,4 +113,59 @@ The definitive version was published in KDD 2024 at [https://doi.org/10.1145/363
 Ron Kohavi, Los Altos, CA, USA, ronnyk@live.com  
 Nanyu Chen, Expedia Group, San Francisco, CA, USA, nc361sirg@gmail.com  
 """)
+import numpy as np
+import matplotlib.pyplot as plt
+import streamlit as st
+from math import erf, sqrt
 
+# Approximation of inverse error function (erfinv)
+def erfinv_approx(x):
+    # Approximation using numerical methods (e.g., Newton-Raphson method)
+    a = 0.147
+    sign = 1 if x >= 0 else -1
+    ln = np.log(1 - x ** 2)
+    part1 = 2 / (np.pi * a) + ln / 2
+    part2 = (ln / a) + np.sqrt((ln / a) ** 2 + (2 / a) * ln)
+    return sign * np.sqrt(np.sqrt(part1 ** 2 - part2) - part1)
+
+# Normal CDF using error function
+def norm_cdf(x, mean, std):
+    return 0.5 * (1 + erf((x - mean) / (std * sqrt(2))))
+
+# Normal PPF (inverse CDF) using our approximation for erfinv
+def norm_ppf(p, mean, std):
+    return mean + std * sqrt(2) * erfinv_approx(2 * p - 1)
+
+# Generate normal distributions
+def plot_power(mean_diff, sample_size, std_ratio):
+    std1 = 1  # Baseline std
+    std2 = std1 * std_ratio  # Adjusted std based on variance ratio
+
+    x = np.linspace(-3, 6, 1000)
+    dist1 = np.exp(-0.5 * ((x - 0) / std1) ** 2) / (std1 * np.sqrt(2 * np.pi))
+    dist2 = np.exp(-0.5 * ((x - mean_diff) / std2) ** 2) / (std2 * np.sqrt(2 * np.pi))
+
+    # Compute power (area beyond threshold)
+    alpha = 0.05
+    critical_value = norm_ppf(1 - alpha, 0, std1 / sqrt(sample_size))
+    power = 1 - norm_cdf(critical_value, mean_diff, std2 / sqrt(sample_size))
+
+    plt.figure(figsize=(6, 4))
+    plt.plot(x, dist1, label="Null (H0)", color="blue")
+    plt.plot(x, dist2, label="Alternative (H1)", color="red")
+    plt.axvline(critical_value, linestyle="dashed", color="black", label="Critical Value")
+    plt.fill_between(x, dist2, where=x > critical_value, color="red", alpha=0.3, label="Power (1-β)")
+    plt.legend()
+    plt.xlabel("Test Statistic")
+    plt.ylabel("Density")
+    plt.title(f"Power Visualization (Power = {power:.2f})")
+    st.pyplot(plt)
+
+# Streamlit UI
+st.title("Power Visualizer")
+
+mean_diff = st.slider("Mean Difference (Effect Size)", 0.1, 3.0, 0.5, 0.1)
+sample_size = st.slider("Sample Size per Group", 1000, 10000, 1000, 10)
+std_ratio = st.slider("Std Ratio (Variance Ratio)", 0.5, 2.0, 1.0, 0.1)
+
+plot_power(mean_diff, sample_size, std_ratio)
