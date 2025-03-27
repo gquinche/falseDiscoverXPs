@@ -1,6 +1,13 @@
 import streamlit as st
 import plotly.graph_objects as go
 
+# Initialize slider state
+if "initial_phi" not in st.session_state:
+    st.session_state.slider_value = 50  # Default value
+initial_phi = 0.8
+initial_alpha = 0.05
+initial_beta = 0.5
+
 def compute_values(phi, alpha, beta):
     false_ideas = phi
     true_ideas = 1 - phi
@@ -47,7 +54,7 @@ def create_sankey(phi, alpha, beta):
                        showarrow=False, font=dict(size=14, color="white"),
                        bgcolor="black", bordercolor="white", borderwidth=2)
 
-    return fig
+    return fig,fdr
 
 
 st.markdown("""
@@ -67,12 +74,18 @@ When you are looking at an incredible result and wondering if it is real (in you
 
 For teams making **investment decisions** based on experiment results, **FDR is what matters**—because it tells us how often we’re acting on misleading results. If many tested ideas are false (which is common in speculative research), then **FDR can be much higher than 0.05, even if α is set at 0.05**.
 """)
-
-phi = st.slider("Proportion of False Ideas", 0.1, 0.9, 0.8, 0.01)
+max_phi = 1
+phi = st.slider("Proportion of False Ideas", 0.1,max_phi, initial_phi, 0.01)
 alpha = st.slider("Significance Level (α)", 0.01, 0.1, 0.05, 0.01)
 beta = 1 - st.slider("Power (1-β)", 0.1, 1.0, 0.6, 0.01)
 
-st.plotly_chart(create_sankey(phi, alpha, beta))
+plot,fdr = create_sankey(phi, alpha, beta)
+st.plotly_chart(plot)
+
+# create a button to use the current fdr as the current value of phi
+if st.button("Use the current FDR as the current value of phi"):
+    st.session_state.slider_value = min(fdr, max_phi)
+
 st.markdown("""
 ## **When Is Power Less Critical? 🔑**  
 
