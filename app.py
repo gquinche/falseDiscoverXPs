@@ -1,11 +1,13 @@
 import streamlit as st
 import plotly.graph_objects as go
 
-# Initialize slider state
+# Initialize session state
 if "initial_phi" not in st.session_state:
     st.session_state.initial_phi = 0.8  # Default value
+
 initial_alpha = 0.05
 initial_beta = 0.5
+max_phi = 1.0
 
 def compute_values(phi, alpha, beta):
     false_ideas = phi
@@ -24,8 +26,8 @@ def compute_values(phi, alpha, beta):
 def create_sankey(phi, alpha, beta):
     labels = [
         "False Ideas (H₀ true)", "True Ideas (H₁ true)",
-        "False Positives (α)", "True Negatives",
-        "True Positives (Power)", "False Negatives (β)"
+        "False Positives ", "True Negatives",
+        "True Positives ", "False Negatives"
     ]
     
     source = [0, 0, 1, 1]
@@ -49,81 +51,104 @@ def create_sankey(phi, alpha, beta):
         )
     ))
 
-    fig.add_annotation(x=0.5, y=-0.1, text=f" FDR: {fdr:.1f}%", 
+    fig.add_annotation(x=0.5, y=-0.1, text=f" FDR: {fdr:.1f}% (red to green ratio)", 
                        showarrow=False, font=dict(size=14, color="white"),
                        bgcolor="black", bordercolor="white", borderwidth=2)
 
-    return fig,fdr
+    return fig, fdr / 100
+
+# **Define placeholders to control layout**
+
+st.markdown("""
+# **Understanding Scientific Criticism and p-Values**
+
+Scientific research has faced scrutiny due to reproducibility issues, often tied to the widespread use of the **0.05 significance threshold** for p-values. When many tested hypotheses are false, **false discoveries** (statistically significant but incorrect results) become more frequent. This challenges the misconception that 95% (1 - 0.05) of statistically significant results are true.
+
+In this app, you can visualize an estimation of the number of false discoveries based on your chosen significance level, statistical power, and the proportion of true ideas. Additionally, we explore how the impact of false discoveries depends on **how the results are applied**.
+
+## **What Is a "False Positive"?**
+
+A common misunderstanding is equating the **false positive rate (FPR)** with the probability that a statistically significant result is actually false, which is the **false discovery rate (FDR)**. These are **not the same**:
+
+- **False Positive Rate (FPR):** The probability of detecting an effect **when none exists**. This is directly controlled by **α** (e.g., 0.05) and is calculated as:
+""")
+st.latex(r"FPR = \frac{\text{False Positives}}{\text{False Positives} + \text{True Negatives}}")
+
+st.markdown("""
+- **False Discovery Rate (FDR):** The proportion of statistically significant results that are actually false positives. This depends on **α**, statistical power, and the proportion of true hypotheses, and is calculated as:
+""")
+st.latex(r"FDR = \frac{\text{False Positives}}{\text{False Positives} + \text{True Positives}}")
+st.markdown("""
+## **Why FDR Matters**
+
+
+When evaluating an impressive result—whether in a research study or a company experiment—you are actually concerned with **FDR**, not FPR. Only when experiments are designed with high statistical power and strong hypotheses does **FPR approximate FDR**, meaning a 5% significance threshold could translate into a 95% probability that a result is real.
+
+For teams making **investment decisions** or **long-term plans** based on experimental results, **FDR is critical**. In speculative research, where many tested ideas are false, **FDR can be as much as 4 times α**, meaning 20% of discoveries are false even with α set at 0.05.
+
+            
+
+People often confuse FPR and FDR because both use false positives in the numerator and their namings, but their denominators differ. This app focuses on **FDR**, clarifying that **α alone does not determine the number of false discoveries** in an experiment.
+One could argue that FDR is more relevant for the general public as it allows them to quantify how much a experiment in science or technology should make them adjust their beliefs, whereas alpha is more relevant
+ for the researchers as it influences policies related to getting published, product launches etc.
+
+The graph below illustrates how the proportion of false ideas, significance level, and statistical power influence the number of false discoveries, represented by the red-to-green ratio.
+            """)
+
+
+graph_placeholder = st.empty()   # Placeholder for graph (top)
+slider_placeholder = st.empty()  # Placeholder for sliders (bottom)
+st.text(f"You can simulate rerunning the XP and updating the prior (or false idea probability) using the FDR, this shows the importance of replication, as it make us more and more certain with each rerun..""")
+button_placeholder = st.empty()  # Placeholder for "Repeat XP" button (middle)
+# **Sliders (keep them together in a container)**
+with slider_placeholder.container():
+    phi = st.slider("Proportion of False Ideas Φ", 0.0, max_phi, st.session_state.initial_phi, 0.01)
+    alpha = st.slider("Significance Level (α)", 0.01, 0.1, initial_alpha, 0.01)
+    beta = 1 - st.slider("Power (1-β)", 0.1, 1.0, 1-initial_beta, 0.01)
+
+# **Generate the graph**
+plot, fdr = create_sankey(phi, alpha, beta)
+graph_placeholder.plotly_chart(plot)  # Graph appears first
+
+# **Button (below graph)**
+with button_placeholder:
+    if st.button("Simulate rerunning stat sig XP"):
+        st.session_state.initial_phi = min(fdr, max_phi)
 
 
 st.markdown("""
-# **Understanding better p values critiscism**  
 
-Science has faced scrutiny due to reproducibility issues, often linked to the widespread use of the **0.05 significance threshold**. When many tested ideas are false, **false positives** (statistically significant but incorrect results) become more common. However, the impact of false positives depends on **how results are used**.
+## **When Is Power Less Critical?** 🔑  
 
-## **What Do We Mean by "False Positives"?**  
-A common misunderstanding is equating **false positive rate (FPR)** with the probability that a given statistically significant result is actually false. These are **not the same**:
+Many teams avoid power analysis or lack sufficient power to approximate the 5% FDR they believe they achieve. While this isn't ideal, it is better to experiment than not experiment at all. If experiments are primarily used to prevent harmful changes (e.g., rolling back features with significant negative impact), false discoveries are often low-cost and reversible. This makes FDR less of a concern because:
 
-- **False Positive Rate (FPR):** The probability that a test detects an effect **when there is none** (controlled directly by α, e.g., 0.05).
-            False Positives / False Positives + True negatives  
-- **False Discovery Rate (FDR):** The proportion of statistically significant results that are actually false positives. This depends **not just on α, but also on power and how many tested hypotheses are actually true**.
-            False Positives / False Positives + **True positives**  
+- Negative false discoveries are likely neutral or slightly negative, rather than truly beneficial.
+- Rolling back a feature doesn’t waste significant resources, unlike scaling up a false discovery as a "win."
 
-When you are looking at an incredible result and wondering if it is real (in your company or on scientific literature), you are wondering about FDR, and not about the FPR. Only when you are very diligent on what you test and the power of the XP does FPR approximate FDR.
+### **Takeaways for Experimentation**
+- **If experiments guide major investments or product launches**, controlling FDR is crucial to avoid wasted resources.
+- **If experiments primarily prevent harm**, running tests—even with imperfect power—is better than making blind decisions.
 
-For teams making **investment decisions** based on experiment results, **FDR is what matters**—because it tells us how often we’re acting on misleading results. If many tested ideas are false (which is common in speculative research), then **FDR can be much higher than 0.05, even if α is set at 0.05**.
-""")
-max_phi = 1.0
-phi = st.slider("Proportion of False Ideas", 0.1,max_phi, st.session_state.initial_phi, 0.01)
-alpha = st.slider("Significance Level (α)", 0.01, 0.1, initial_alpha, 0.01)
-beta = 1 - st.slider("Power (1-β)", 0.1, 1.0, 1-initial_beta, 0.01)
+### **Context in Tech-Led Experiments**
 
-plot,fdr = create_sankey(phi, alpha, beta)
-st.plotly_chart(plot)
+In technology-driven experimentation, the primary goal is to learn quickly and iterate. Unlike scientific research—where most investment happens after validation—product development often involves significant effort before an experiment is conducted.
 
-# create a button to use the current fdr as the current value of phi
-if st.button("Repeat XP"):
-    st.session_state.initial_phi = min(fdr, max_phi)
+This changes the implications of false discoveries:
 
-st.markdown("""
-## **When Is Power Less Critical? 🔑**  
+- False discoveries are less costly since the product is already developed.
+- Misinformation and usage can be corrected quickly through centralized means.
+- Scaling false discoveries often leads to neutral, rather than negative, outcomes.
+- Most experiments test **incremental improvements** with fewer ethical implications.
 
-Many teams avoid power analysis, but this **isn’t always a major issue**. If experiments are used **mainly to prevent bad changes** (e.g., rolling back features that show significant negative impact), then false positives are **low-cost and reversible**. This makes **FDR less of a concern** because:
+### **Is α Too High?**
 
-1. **Most false positives are neutral or slightly negative, not truly beneficial.**  
-2. **Rolling back a feature doesn’t waste significant resources**, unlike scaling up a false positive as a "win."  
+The choice of α is still a debated topic. Some fields, like physics and genomics, have adopted much lower α thresholds, while online experimentation services often use higher values (e.g., up to 0.2).
 
-## **Takeaway for Experimentation**  
-- **If you’re using experiments for launching & investing in new ideas**, controlling FDR is crucial to avoid wasting resources.  
-- **If you’re using experiments to prevent harm**, running XPs without perfect power is still better than launching blindly.  
+### **Conclusion**
 
-###  Context in Tech-Led Experiments
-In tech-driven experimentation, the goal often extends beyond binary success or failure—it's about learning quickly and iterating. Unlike scientific research, where most investment happens after an idea is validated, in product development, a significant portion of the opportunity cost is already sunk by the time an experiment is launched.
+Not all false discoveries are equally harmful—what matters is how they shape decisions. This app demonstrates how false idea proportions, significance levels, and statistical power influence false discovery rates. Use this tool to understand trade-offs in experimental design and balance statistical rigor with practical decision-making.""")
 
-This changes the implications of false positives:
 
-- Higher α can accelerate iteration, accepting more false positives but enabling teams to quickly discard bad ideas.
-
-- False positives may not be as harmful as they probably lead to neutral (rather than negative) outcomes.
-
-- Most experiments test incremental improvements, so even true negatives (ideas that don't work) provide valuable insights for refining future tests.
-
-However, when experiments directly influence business investment decisions, FDR remains crucial. If a team prioritizes speed but lacks a structured approach to filter out false discoveries post-experiment, they risk scaling misleading results.
-
-In short: **Not all false positives are equally harmful—what matters is how they shape decisions.**
-
-### **Citations**  
-Redefine statistical significance:  
-We propose to change the default P-value threshold for statistical significance from 0.05 to 0.005 for claims of new discoveries.  
-Daniel J. Benjamin, James O. Berger, Magnus Johannesson et al.  
-[https://www.nature.com/articles/s41562-017-0189-z.pdf](https://www.nature.com/articles/s41562-017-0189-z.pdf)
-
-False Positives in A/B Tests:  
-© Kohavi, Chen 2024. This is the author's version of the work. It is posted here for your personal use. Not for redistribution.  
-The definitive version was published in KDD 2024 at [https://doi.org/10.1145/3637528.3671631](https://doi.org/10.1145/3637528.3671631)  
-Ron Kohavi, Los Altos, CA, USA, ronnyk@live.com  
-Nanyu Chen, Expedia Group, San Francisco, CA, USA, nc361sirg@gmail.com  
-""")
 import numpy as np
 import matplotlib.pyplot as plt
 import streamlit as st
@@ -184,3 +209,14 @@ sample_size = st.slider("Sample Size per Group", 1000, 100000, 1000, 10)  # Lowe
 std_ratio = st.slider("Std Ratio (Variance Ratio)", 0.5, 4.0, 3.0, 0.1)
 st.markdown(" Power is the proportion or probability of measuring a difference over a setted threshold when there's actually a difference")
 plot_power(mean_diff, sample_size, std_ratio)
+st.markdown("""
+### **Citations**  
+
+- **Redefine Statistical Significance**  
+  Daniel J. Benjamin, James O. Berger, Magnus Johannesson et al.  
+  [https://www.nature.com/articles/s41562-017-0189-z.pdf](https://www.nature.com/articles/s41562-017-0189-z.pdf)
+
+- **False Positives in A/B Tests**  
+  Kohavi, Chen (2024).  
+  [https://doi.org/10.1145/3637528.3671631](https://doi.org/10.1145/3637528.3671631)
+""")
