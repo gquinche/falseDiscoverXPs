@@ -49,10 +49,9 @@ def create_sankey(phi, alpha, beta):
 
     return fig
 
-st.title("XPs False Discovery Rate")
 
 st.markdown("""
-# **Why Experimentation Matters & How to Use It Wisely**  
+# **Understanding better p values critiscism**  
 
 Science has faced scrutiny due to reproducibility issues, often linked to the widespread use of the **0.05 significance threshold**. When many tested ideas are false, **false positives** (statistically significant but incorrect results) become more common. However, the impact of false positives depends on **how results are used**.
 
@@ -120,7 +119,6 @@ from math import erf, sqrt
 
 # Approximation of inverse error function (erfinv)
 def erfinv_approx(x):
-    # Approximation using numerical methods (e.g., Newton-Raphson method)
     a = 0.147
     sign = 1 if x >= 0 else -1
     ln = np.log(1 - x ** 2)
@@ -132,40 +130,45 @@ def erfinv_approx(x):
 def norm_cdf(x, mean, std):
     return 0.5 * (1 + erf((x - mean) / (std * sqrt(2))))
 
-# Normal PPF (inverse CDF) using our approximation for erfinv
+# Normal PPF (inverse CDF)
 def norm_ppf(p, mean, std):
     return mean + std * sqrt(2) * erfinv_approx(2 * p - 1)
 
 # Generate normal distributions
 def plot_power(mean_diff, sample_size, std_ratio):
-    std1 = 1  # Baseline std
-    std2 = std1 * std_ratio  # Adjusted std based on variance ratio
+    base_std = 2  # Increased baseline std to avoid pulse-like effect
+    std1 = base_std * std_ratio  # Apply std_ratio to both groups
+    std2 = base_std * std_ratio
 
-    x = np.linspace(-3, 6, 1000)
-    dist1 = np.exp(-0.5 * ((x - 0) / std1) ** 2) / (std1 * np.sqrt(2 * np.pi))
-    dist2 = np.exp(-0.5 * ((x - mean_diff) / std2) ** 2) / (std2 * np.sqrt(2 * np.pi))
+    se1 = std1 / sqrt(sample_size)  # Standard error for both groups
+    se2 = std2 / sqrt(sample_size)
 
-    # Compute power (area beyond threshold)
+    x = np.linspace(-3, mean_diff + 3, 1000)
+    dist1 = np.exp(-0.5 * ((x - 0) / se1) ** 2) / (se1 * np.sqrt(2 * np.pi))
+    dist2 = np.exp(-0.5 * ((x - mean_diff) / se2) ** 2) / (se2 * np.sqrt(2 * np.pi))
+
+    # Compute critical value and power
     alpha = 0.05
-    critical_value = norm_ppf(1 - alpha, 0, std1 / sqrt(sample_size))
-    power = 1 - norm_cdf(critical_value, mean_diff, std2 / sqrt(sample_size))
+    critical_value = norm_ppf(1 - alpha, 0, se1)
+    power = 1 - norm_cdf(critical_value, mean_diff, se2)
 
-    plt.figure(figsize=(6, 4))
-    plt.plot(x, dist1, label="Null (H0)", color="blue")
-    plt.plot(x, dist2, label="Alternative (H1)", color="red")
+    plt.figure(figsize=(7, 5))
+    plt.plot(x, dist1, label="Sample Mean 1 (Control)", color="blue")
+    plt.plot(x, dist2, label="Sample Mean 2 (Treatment)", color="red")
     plt.axvline(critical_value, linestyle="dashed", color="black", label="Critical Value")
+    plt.axvline(mean_diff, linestyle="dotted", color="green", label="ATE (Effect Size)")
     plt.fill_between(x, dist2, where=x > critical_value, color="red", alpha=0.3, label="Power (1-β)")
     plt.legend()
-    plt.xlabel("Test Statistic")
+    plt.xlabel("Sample Mean")
     plt.ylabel("Density")
-    plt.title(f"Power Visualization (Power = {power:.2f})")
+    plt.title(f"Power Visualization\nATE = {mean_diff:.2f}, Power = {power:.2f}")
     st.pyplot(plt)
 
 # Streamlit UI
-st.title("Power Visualizer")
+st.title("Power Visualizer WIP")
 
-mean_diff = st.slider("Mean Difference (Effect Size)", 0.1, 3.0, 0.5, 0.1)
-sample_size = st.slider("Sample Size per Group", 1000, 10000, 1000, 10)
-std_ratio = st.slider("Std Ratio (Variance Ratio)", 0.5, 2.0, 1.0, 0.1)
-
+mean_diff = st.slider("Mean Difference (Effect Size)", 0.1, 3.0, 0.6, 0.1)
+sample_size = st.slider("Sample Size per Group", 1000, 100000, 1000, 10)  # Lowered min sample size for more flexibility
+std_ratio = st.slider("Std Ratio (Variance Ratio)", 0.5, 4.0, 3.0, 0.1)
+st.markdown(" Power is the proportion or probability of measuring a difference over a setted threshold when there's actually a difference")
 plot_power(mean_diff, sample_size, std_ratio)
